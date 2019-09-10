@@ -2,9 +2,10 @@ import os
 
 import json
 import random
+import urllib
 import requests
 
-from . import SocketServer
+from .SocketServer import SocketServer
 
 
 class SpotifyAPIAccessError(Exception):
@@ -48,5 +49,17 @@ class SpotifyAPI:
         self.credentials["scope"] = scopes
 
     def authenticate(self):
-        pass
+        # baseURL = "https://accounts.spotify.com/authorize"
+        # credentials = self.credentials.copy()
+        #
+        # if credentials["scope"] is None:
+        #     credentials.pop("scope")
+        #
+        # print("hi")
+
+        port = self.credentials["redirect_uri"].split(":")
+        port = int(port[-1])
+
+        ss = SocketServer("", port)
+        print(ss.listen())
 
