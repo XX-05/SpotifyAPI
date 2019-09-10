@@ -1,6 +1,7 @@
-import os
 import sys
 import socket
+
+from .SuccessfulOAuth import success_html
 
 
 class SocketServer:
@@ -27,11 +28,12 @@ class SocketServer:
 
         conn, addr = s.accept()
 
-        with open("../API/SuccessfulOAuth.html", "r") as f:
-            success = f.read()
+        success = success_html()
 
-            d = conn.recv(1024)
+        data = conn.recv(1024)
 
-            conn.send(b"HTTP/1.0 200 OK\n" +
-                      b"Content-Type: text/html\n\n" +
-                      success.encode("ascii"))
+        conn.send(b"HTTP/1.0 200 OK\n" +
+                  b"Content-Type: text/html\n\n" +
+                  success.encode("ascii"))
+
+        return data
