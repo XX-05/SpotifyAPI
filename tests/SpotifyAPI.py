@@ -1,4 +1,4 @@
-from API import SpotifyAPI
+from SpotifyAPI import SpotifyAPI
 
 
 api = SpotifyAPI()
