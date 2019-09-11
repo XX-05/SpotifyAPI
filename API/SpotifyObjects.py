@@ -1,5 +1,5 @@
 import os
-from . import SongDL
+from .SongDL import SongDL
 
 
 def mkdir(path):
@@ -20,12 +20,13 @@ def status_bar(i, total, length=10):
     return f"[{bar}]"
 
 
-class SpotifyTrack(SongDL):
+class SpotifyTrack:
     def __init__(self, track_info):
         self.info = track_info
 
     def download(self, location="", filename=None, youtube_api=None, try_lyrics=False):
         try:
+            dl = SongDL()
             if self.info:
                 name = self.info["name"]
 
@@ -38,9 +39,9 @@ class SpotifyTrack(SongDL):
 
                 filepath = os.path.join(location, str(filename))
                 if youtube_api:
-                    self.api_download_song(name, artists, youtube_api, filepath)
+                    dl.api_download_song(name, artists, youtube_api, filepath)
                 else:
-                    self.download_song(name, artists, filepath, try_lyrics=try_lyrics)
+                    dl.download_song(name, artists, filepath, try_lyrics=try_lyrics)
 
         except Exception as e:
             filename = str(filename) + ".temp.wav"
@@ -48,6 +49,8 @@ class SpotifyTrack(SongDL):
 
             if os.path.exists(filepath):
                 os.remove(filepath)
+
+            print("error downloading %s by %s - %s" % (name, artists, e))
 
 
 class SpotifyPlaylist:

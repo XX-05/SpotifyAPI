@@ -10,6 +10,7 @@ import requests
 import webbrowser
 
 from .SocketServer import SocketServer
+from .SpotifyObjects import SpotifyPlaylist, SpotifyTrack
 
 
 class SpotifyOAuthError(Exception):
@@ -31,6 +32,7 @@ class SpotifyAPI:
             "scope": None,
         }
 
+        self.auth_header = None
         self.token_info = self._load_stored_info("SPOTIFY_TOKEN_INFO")
 
     def _load_stored_info(self, name):
@@ -130,7 +132,7 @@ class SpotifyAPI:
         token_info = response.json()
         token_info = self._modify_token_expiration(token_info)
 
-        self._refresh_auth_header(token_info)
+        self.auth_header = self._refresh_auth_header(token_info)
         self._store_info(token_info, "SPOTIFY_TOKEN_INFO")
 
         self.token_info = token_info
@@ -155,7 +157,7 @@ class SpotifyAPI:
         if "refresh_token" not in rf_token_info:
             rf_token_info["refresh_token"] = token_info["refresh_token"]
 
-        self._refresh_auth_header(rf_token_info)
+        self.auth_header = self._refresh_auth_header(rf_token_info)
         self._store_info(rf_token_info, "SPOTIFY_TOKEN_INFO")
 
         self.token_info = rf_token_info

@@ -1,4 +1,6 @@
 import re
+
+import urllib.request
 import urllib.parse
 
 import youtube_dl
@@ -17,7 +19,8 @@ def argmax(array):
 
 
 class SongDL:
-    def _jaccard_score(self, x, y):
+    @staticmethod
+    def _jaccard_score(x, y):
         x, y = set(x), set(y)
 
         union = x.union(y)
@@ -55,7 +58,7 @@ class SongDL:
         return f"www.youtube.com/watch?v={ids[index]}"
 
     def download_song(self, title, artists, filename=0, try_lyrics=False):
-        songURL = self.find_song(title, artists, try_lyrics)
+        song_url = self.find_song(title, artists, try_lyrics)
 
         ydl_opts = {
             "outtmpl": f"{filename}.wav",
@@ -74,12 +77,12 @@ class SongDL:
         }
 
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([songURL])
+            ydl.download([song_url])
 
         return f"{filename}.wav"
 
     def api_download_song(self, title, artists, api, filename=0):
-        songURL = self.find_song_api(title, artists, api)
+        song_url = self.find_song_api(title, artists, api)
 
         ydl_opts = {
             "outtmpl": f"{filename}.wav",
@@ -98,6 +101,6 @@ class SongDL:
         }
 
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([songURL])
+            ydl.download([song_url])
 
         return f"{filename}.wav"
