@@ -31,24 +31,26 @@ class SpotifyAPI:
             "scope": None,
         }
 
-        self.token_info = None
+        self.token_info = self._load_stored_info("SPOTIFY_TOKEN_INFO")
 
     def _load_stored_info(self, name):
         file_name = base64.b64encode(name.encode("ascii"))
         file_name = ".cache-%s" % file_name.decode("ascii")
 
         if not os.path.isfile(file_name):
-            raise FileNotFoundError("cache file for '%s' not found!" % name)
+            return None
 
         with open(file_name, "r") as f:
-            return json.load(f)
+            data = base64.b64decode(f.read().encode("ascii")).decode("ascii")
+            return json.loads(data)
 
     def _store_info(self, data, name):
         file_name = base64.b64encode(name.encode("ascii"))
         file_name = ".cache-%s" % file_name.decode("ascii")
 
         with open(file_name, "w") as f:
-            f.write(base64.b64encode(str(data).encode("ascii")).decode("ascii"))
+            data = str(data).replace("\'", "\"").encode("ascii")
+            f.write(base64.b64encode(data).decode("ascii"))
 
     def load_credentials_from_file(self, credentials_file):
         if not os.path.isfile(credentials_file):
@@ -71,6 +73,8 @@ class SpotifyAPI:
         if "scope" in credentials:
             self.credentials["scope"] = credentials["scope"]
 
+        self.authenticate()
+
     def load_credentials(self, client_id, client_secret, redirect_uri=None, scopes=None):
         self.credentials["client_id"] = client_id
         self.credentials["client_secret"] = client_secret
@@ -79,6 +83,8 @@ class SpotifyAPI:
             self.credentials["redirect_uri"] = redirect_uri
 
         self.credentials["scope"] = scopes
+
+        self.authenticate()
 
     def _listen_for_auth_code(self):
         port = self.credentials["redirect_uri"].split(":")
@@ -143,35 +149,88 @@ class SpotifyAPI:
         if response.status_code != 200:
             raise SpotifyOAuthError("error refreshing access token '%s'" % response.reason)
 
-        token_info = response.json()
-        token_info = self._modify_token_expiration(token_info)
+        rf_token_info = response.json()
+        rf_token_info = self._modify_token_expiration(rf_token_info)
 
-        self._refresh_auth_header(token_info)
-        self._store_info(token_info, "SPOTIFY_TOKEN_INFO")
+        if "refresh_token" not in rf_token_info:
+            rf_token_info["refresh_token"] = token_info["refresh_token"]
 
-        self.token_info = token_info
+        self._refresh_auth_header(rf_token_info)
+        self._store_info(rf_token_info, "SPOTIFY_TOKEN_INFO")
 
-        return token_info
+        self.token_info = rf_token_info
+
+        return rf_token_info
+
+    def _is_token_expired(self, token_info):
+        return token_info["expires_in"] - int(time.time()) < 60
 
     def authenticate(self):
-        base_url = "https://accounts.spotify.com/authorize"
+        token_info = self._load_stored_info("SPOTIFY_TOKEN_INFO")
 
-        credentials = self.credentials.copy()
+        if not token_info:
+            base_url = "https://accounts.spotify.com/authorize"
 
-        if credentials["scope"] is None:
-            credentials.pop("scope")
+            credentials = self.credentials.copy()
 
-        url = self._encode_uri(base_url, credentials)
-        webbrowser.open_new_tab(url)
+            if credentials["scope"] is None:
+                credentials.pop("scope")
 
-        parameters = self._listen_for_auth_code()
+            url = self._encode_uri(base_url, credentials)
+            webbrowser.open_new_tab(url)
 
-        if float(parameters["state"]) != self.credentials["state"]:
-            raise SpotifyOAuthError("unable to verify authenticity of returned access code (unmaching state)")
+            parameters = self._listen_for_auth_code()
 
-        if "error" in parameters:
-            raise SpotifyOAuthError("error obtaining access code")
+            if float(parameters["state"]) != self.credentials["state"]:
+                raise SpotifyOAuthError("unable to verify authenticity of returned access code (unmaching state)")
 
-        token_info = self._request_access_token(parameters["code"])
+            if "error" in parameters:
+                raise SpotifyOAuthError("error obtaining access code")
 
-        return token_info
+            token_info = self._request_access_token(parameters["code"])
+
+            return token_info
+
+        elif self._is_token_expired(token_info):
+            self._refresh_access_token(token_info)
+
+    def access_api(self, uri, body=None, request_type="GET", token_refreshed=False):
+        if self._is_token_expired(self.token_info):
+            self.token_info = self._refresh_access_token(self.token_info)
+
+        if request_type not in ["GET", "POST"]:
+            raise SpotifyAPIAccessError(f"Bad Request Type: {request_type}")
+
+        if request_type == "POST" and body:
+            response = requests.post(uri, data=body, headers=self.auth_header)
+        elif request_type == "GET":
+            response = requests.get(uri, headers=self.auth_header)
+        else:
+            raise Exception("request type (%s) not valid" % request_type)
+
+        if response.status_code != 200:
+            if response.status_code == 401 and not token_refreshed:
+                self.token_info = self._refresh_access_token(self.token_info)
+                return self.access_api(uri, body, request_type, token_refreshed=True)
+            else:
+                raise SpotifyAPIAccessError(response.reason)
+
+        return response.json()
+
+    def get_track_info(self, track_id, as_object=False):
+        uri = f"https://api.spotify.com/v1/tracks/{track_id}"
+        info = self.access_api(uri)
+
+        if as_object:
+            return SpotifyTrack(info)
+
+        return info
+
+    def get_playlist_info(self, playlist_id, as_object=False):
+        uri = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+        info = self.access_api(uri)
+
+        if as_object:
+            return SpotifyPlaylist(info, self)
+
+        return info
