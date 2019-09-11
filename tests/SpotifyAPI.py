@@ -5,3 +5,4 @@ api = SpotifyAPI()
 api.load_credentials_from_file("credentials.json")
 
 print(api.token_info)
+
